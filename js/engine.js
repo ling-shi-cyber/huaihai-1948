@@ -586,33 +586,164 @@
     frames.push({ kind: 'rout', x: u.x, y: u.y, faction: u.faction });
   }
 
-  function resolveEngagement(s, attackers, target, frames) {
+  function assessEngagement(s, attackers, target) {
     const support = s.units.filter(v => v.alive && v.faction === target.faction && v.id !== target.id &&
       Math.hypot(v.x - target.x, v.y - target.y) < 50);
     const extra = s.units.filter(v => v.alive && v.faction === attackers[0].faction &&
       attackers.indexOf(v) < 0 && Math.hypot(v.x - target.x, v.y - target.y) < 48);
 
     let Dp = powerOf(s, target, 'def');
-    support.slice(0, 3).forEach(v => { Dp += powerOf(s, v, 'def') * 0.2; });
+    const defBase = Dp;
+    let supportPower = 0;
+    support.slice(0, 3).forEach(v => {
+      const p = powerOf(s, v, 'def') * 0.2;
+      supportPower += p;
+      Dp += p;
+    });
+
     let Ap = 0;
+    let riverCount = 0;
+    const flank = isFlanked(target, attackers);
     for (const a of attackers) {
       const river = Geo.crossesWater(s.grid, a.x, a.y, target.x, target.y);
-      Ap += powerOf(s, a, 'atk', { river: river, flank: isFlanked(target, attackers) });
+      if (river) riverCount++;
+      Ap += powerOf(s, a, 'atk', { river: river, flank: flank });
     }
-    extra.slice(0, 4).forEach(v => { Ap += powerOf(s, v, 'def') * 0.1; });
-    // 炮兵支援：范围内炮兵不直接接敌，但为进攻提供火力
+    let extraPower = 0;
+    extra.slice(0, 4).forEach(v => {
+      const p = powerOf(s, v, 'def') * 0.1;
+      extraPower += p;
+      Ap += p;
+    });
+
     const arty = s.units.filter(v => v.alive && v.faction === attackers[0].faction && v.type === 'art' &&
       Math.hypot(v.x - target.x, v.y - target.y) < 135);
-    arty.slice(0, 2).forEach(v => { Ap += powerOf(s, v, 'atk') * 0.3; });
-    // 多路合击协同加成
-    Ap *= 1 + Math.min(0.18, Math.max(0, attackers.length - 1) * 0.045);
+    let artyPower = 0;
+    arty.slice(0, 2).forEach(v => {
+      const p = powerOf(s, v, 'atk') * 0.3;
+      artyPower += p;
+      Ap += p;
+    });
+
+    const multiBonus = Math.min(0.18, Math.max(0, attackers.length - 1) * 0.045);
+    Ap *= 1 + multiBonus;
 
     const ratio = Ap / Math.max(6, Dp);
-    const r1 = 0.86 + rng(s) * 0.28;
-    const defLossF = clamp(0.01 + 0.052 * ratio, 0.006, 0.22) * r1;
-    const atkLossF = clamp(0.0015 + 0.006 / Math.max(0.35, ratio), 0.0015, 0.04) * (1.9 - r1);
-    const defLoss = applyLoss(s, target, target.troops * defLossF);
+    const defLossBaseF = clamp(0.01 + 0.052 * ratio, 0.006, 0.22);
+    const atkLossBaseF = clamp(0.0015 + 0.006 / Math.max(0.35, ratio), 0.0015, 0.04);
     const atkPool = attackers.reduce((a, u) => a + u.troops, 0);
+
+    function atkLossFor(f) {
+      let total = 0;
+      for (const a of attackers) {
+        const share = atkPool > 0 ? a.troops / atkPool : 1 / attackers.length;
+        total += Math.min(a.troops * 0.06, atkPool * f * share);
+      }
+      return total;
+    }
+
+    const factors = [];
+    const warnings = [];
+    const push = (label, value, tone) => factors.push({ label: label, value: value, tone: tone || '' });
+
+    if (riverCount > 0) {
+      push('渡河攻击', '-' + (riverCount > 1 ? '28%×' + riverCount : '28%'), 'bad');
+    }
+    if (flank) push('侧翼合击', '+12%', 'good');
+    if (attackers.length > 1) push('多路协同', '+' + Math.round(multiBonus * 100) + '%', 'good');
+    if (artyPower > 0) push('炮兵支援', '+' + Math.round(artyPower / Math.max(1, Ap - artyPower) * 100) + '%', 'good');
+    if (extraPower > 0) push('附近友军火力', '+' + Math.round(extraPower / Math.max(1, Ap - extraPower) * 100) + '%', 'good');
+    const anyBarrage = attackers.some(a => a.flagBarrage);
+    const anyNight = attackers.some(a => a.flagNight);
+    const anyAssault = attackers.some(a => a.flagAssault);
+    if (anyBarrage) push('炮火准备', '+22%', 'good');
+    if (anyNight) push('夜间攻击', '+18%', 'good');
+    if (anyAssault) push('突击', '+15%', 'good');
+
+    const hqAtk = Math.max.apply(null, attackers.map(a => hqBonus(s, a)).concat([0]));
+    if (hqAtk > 0) push('我军指挥所靠前', '+' + Math.round(hqAtk * 100) + '%', 'good');
+    const hqDef = hqBonus(s, target);
+    if (hqDef > 0) push('敌军指挥所督战', '+' + Math.round(hqDef * 70) + '%', 'bad');
+
+    if (target.entrench > 0) push('敌军工事', '+' + Math.round(target.entrench * 0.62) + '%', 'bad');
+    const city = Engine.nearestCity(s, target.x, target.y, 26);
+    if (city && city.side === target.faction) {
+      const cm = city.tier === 'major' ? 1.35 : city.tier === 'city' ? 1.22 : city.tier === 'town' ? 1.12 : 1.04;
+      push('敌军据' + city.name + '防御', '+' + Math.round((cm - 1) * 100) + '%', 'bad');
+    }
+    const ti = Geo.cellIndex(s.grid, target.x, target.y);
+    if (s.grid.height[ti] > 0.2) push('敌军占据高地', '+12%', 'bad');
+    if (s.grid.urban[ti]) push('敌军依托城区', '+5%', 'bad');
+    if (support.length > 0) push('敌军友邻支援', '+' + support.length + ' 部', 'bad');
+    const atkHigh = attackers.some(a => {
+      const ai = Geo.cellIndex(s.grid, a.x, a.y);
+      return s.grid.height[ai] > 0.24;
+    });
+    if (atkHigh) push('我军仰攻', '-6%', 'bad');
+
+    if (riverCount > 0) warnings.push('渡河攻击会显著削弱我军火力。');
+    if (target.entrench >= 45) warnings.push('敌军工事坚固，正面强攻代价较高。');
+    if (target.encircled) warnings.push('敌军已被包围，可能投降或溃散。');
+    if (target.supply < 30) warnings.push('敌军补给不足，持续作战能力下降。');
+    if (attackers.some(a => a.supply < 35)) warnings.push('我军部分部队补给不足，攻击力下降。');
+    if (attackers.some(a => a.fatigue > 55)) warnings.push('我军部分部队疲劳较高，建议轮换。');
+    if (support.length > 0) warnings.push('敌军附近有 ' + support.length + ' 部友邻，可能加入防御。');
+    if (attackers.length === 1) warnings.push('单路进攻，没有多路合击加成。');
+    if (ratio < 0.85) warnings.push('兵力比不利，建议增兵或先断敌补给。');
+
+    const defLossExpected = target.troops * defLossBaseF;
+    const defLossMin = target.troops * defLossBaseF * 0.86;
+    const defLossMax = target.troops * defLossBaseF * 1.14;
+    const atkLossExpected = atkLossFor(atkLossBaseF * 0.9);
+    const atkLossMin = atkLossFor(atkLossBaseF * 0.76);
+    const atkLossMax = atkLossFor(atkLossBaseF * 1.04);
+
+    let verdict;
+    if (ratio >= 2.0) verdict = '优势明显';
+    else if (ratio >= 1.35) verdict = '较有把握';
+    else if (ratio >= 1.0) verdict = '势均力敌';
+    else if (ratio >= 0.75) verdict = '较为不利';
+    else verdict = '风险很高';
+
+    return {
+      support: support,
+      extra: extra,
+      arty: arty,
+      flank: flank,
+      riverCount: riverCount,
+      defBase: defBase,
+      supportPower: supportPower,
+      extraPower: extraPower,
+      artyPower: artyPower,
+      preMulti: Ap / (1 + multiBonus),
+      multiBonus: multiBonus,
+      Dp: Dp,
+      Ap: Ap,
+      ratio: ratio,
+      atkPool: atkPool,
+      defLossBaseF: defLossBaseF,
+      atkLossBaseF: atkLossBaseF,
+      defLossExpected: defLossExpected,
+      defLossMin: defLossMin,
+      defLossMax: defLossMax,
+      atkLossExpected: atkLossExpected,
+      atkLossMin: atkLossMin,
+      atkLossMax: atkLossMax,
+      factors: factors,
+      warnings: warnings,
+      verdict: verdict
+    };
+  }
+
+  function resolveEngagement(s, attackers, target, frames) {
+    const A = assessEngagement(s, attackers, target);
+    const ratio = A.ratio;
+
+    const r1 = 0.86 + rng(s) * 0.28;
+    const defLossF = A.defLossBaseF * r1;
+    const defLoss = applyLoss(s, target, target.troops * defLossF);
+    const atkLossF = A.atkLossBaseF * (1.9 - r1);
+    const atkPool = A.atkPool;
     let atkLossTotal = 0;
     for (const a of attackers) {
       const share = atkPool > 0 ? a.troops / atkPool : 1 / attackers.length;
@@ -629,13 +760,17 @@
     s.stats.combats++;
 
     const place = (Engine.nearestCity(s, target.x, target.y, 40) || {}).name || '野外';
+    const factorText = A.factors.slice(0, 5).map(f => f.label + (f.value ? ' ' + f.value : '')).join('，');
     log(s, '【' + place + '】' + attackers.map(a => a.short).join('、') + ' 围攻 ' + target.short +
-      '，敌伤亡 ' + fmtTroops(defLoss) + '，我伤亡 ' + fmtTroops(atkLossTotal) + '。', 'combat', target.x, target.y);
+      '，敌伤亡 ' + fmtTroops(defLoss) + '，我伤亡 ' + fmtTroops(atkLossTotal) + '。' +
+      (factorText ? '（' + factorText + '）' : ''), 'combat', target.x, target.y);
     frames.push({
       kind: 'combat', x: (target.x + attackers[0].x) / 2, y: (target.y + attackers[0].y) / 2,
       targetX: target.x, targetY: target.y, defLoss: defLoss, atkLoss: atkLossTotal,
-      attacker: attackers.map(a => a.short).join('·'), target: target.short, ratio: ratio
+      attacker: attackers.map(a => a.short).join('·'), target: target.short, ratio: ratio,
+      factors: factorText
     });
+
 
     if (target.alive && target.troops < Math.max(1600, target.maxTroops * 0.15)) {
       destroyUnit(s, target, '被歼', frames);
@@ -654,6 +789,22 @@
       else if (a.alive && !a.encircled && a.troops < a.maxTroops * 0.3 && a.morale < 45 && rng(s) < 0.6) routUnit(s, a, target, frames);
     }
   }
+
+  Engine.previewCombat = function (s, ids, targetId) {
+    if (!Array.isArray(ids)) ids = [ids];
+    const target = Engine.unitById(s, targetId);
+    if (!target || !target.alive || target.faction === 'pla') return null;
+    const attackers = ids.map(id => Engine.unitById(s, id))
+      .filter(u => u && u.alive && u.faction !== target.faction && canCommand(s, u));
+    if (!attackers.length) return null;
+    const A = assessEngagement(s, attackers, target);
+    const engagedCount = attackers.filter(u => dist(u, target) <= ENGAGE).length;
+    A.attackers = attackers;
+    A.target = target;
+    A.engagedCount = engagedCount;
+    A.allEngaged = engagedCount === attackers.length;
+    return A;
+  };
 
   /* ---------------- 移动 ---------------- */
   function moveUnitAlong(s, u, budget, frames) {

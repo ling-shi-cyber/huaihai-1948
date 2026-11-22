@@ -327,6 +327,8 @@
     if (App.autoTimer) clearTimeout(App.autoTimer);
     App.started = true;
     HX._lastState = state;
+    if (HX.UI && HX.UI.stopTutorial) HX.UI.stopTutorial();
+    if (HX.Audio) HX.Audio.unlock();
     const busy = document.getElementById('busy-indicator');
     if (busy) busy.classList.add('hidden');
 

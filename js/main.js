@@ -40,6 +40,8 @@
       }
       const busy = document.getElementById('busy-indicator');
       if (busy) busy.classList.add('hidden');
+      if (UI.stopTutorial) UI.stopTutorial();
+      if (HX.Audio) HX.Audio.unlock();
       UI.hideBoot();
       UI.init(this);
       UI.closeModal();
@@ -51,6 +53,7 @@
         }, 420);
       }
       setTimeout(() => UI.showBriefing(), 220);
+      setTimeout(function () { if (UI.startTutorial) UI.startTutorial(); }, 1100);
     },
 
     continueLatest() {
@@ -74,6 +77,7 @@
         return;
       }
       if (UI.isModalOpen()) return;
+      if (UI.tutorialOnExecute) UI.tutorialOnExecute();
       this.busy = true;
       document.getElementById('busy-indicator').classList.remove('hidden');
       UI.refreshAll();
@@ -93,6 +97,11 @@
       this.busy = false;
       document.getElementById('busy-indicator').classList.add('hidden');
       UI.refreshAll();
+      if (HX.Audio) {
+        const fought = (res.frames || []).some(f => f.kind === 'combat' || f.kind === 'destroy' || f.kind === 'rout');
+        if (fought) HX.Audio.combat();
+        else HX.Audio.turn();
+      }
       if (HX.Save) {
         HX.Save.saveAuto({
           label: res.ended ? '战役结束自动存档' : (res.choice ? '抉择前自动存档' : '自动存档')
@@ -153,6 +162,7 @@
       clearTimeout(this.autoTimer);
       this.auto = false;
       this.busy = false;
+      if (UI.stopTutorial) UI.stopTutorial();
       UI.closeModal();
       UI.showBoot();
     },

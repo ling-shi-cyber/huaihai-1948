@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>淮海战役 1948</title>
-<link rel="stylesheet" href="css/style.css?v=20261118b">
+<link rel="stylesheet" href="css/style.css?v=20261122save4">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23151815'/%3E%3Cpath d='M32 8l7 16 17 2-12 12 3 17-15-8-15 8 3-17-12-12 17-2z' fill='%23b23a30'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -59,6 +59,7 @@
       </button>
       <button class="btn" id="btn-auto" title="自动推进战局 (空格)">自动推演</button>
       <button class="btn icon" id="btn-menu" title="战役菜单 / 存档">☰</button>
+      <button class="btn icon" id="btn-sound" title="声音：开（点击关闭）">♪</button>
       <button class="btn ghost" id="btn-log" title="全部战报">战报</button>
       <button class="btn ghost" id="btn-doc" title="作战命令原文">命令原文</button>
       <button class="btn icon" id="btn-help" title="作战手册">?</button>
@@ -139,6 +140,18 @@
 <div id="toast" class="hidden"></div>
 <div id="modal-root"></div>
 
+<div id="tutorial" class="tutorial hidden">
+  <div class="tut-kicker" id="tut-kicker">新手引导 · 第 1 日</div>
+  <div class="tut-title" id="tut-title"></div>
+  <div class="tut-text" id="tut-text"></div>
+  <div class="tut-hint" id="tut-hint"></div>
+  <div class="tut-dots" id="tut-dots"></div>
+  <div class="tut-actions">
+    <button class="btn small ghost" id="btn-tut-skip">跳过引导</button>
+    <button class="btn small primary hidden" id="btn-tut-next">完成引导</button>
+  </div>
+</div>
+
 <!-- ================= 开场 ================= -->
 <div id="boot">
   <div class="boot-bg"></div>
@@ -174,13 +187,14 @@
 
 <div id="loading" class="hidden"><div class="spinner"></div><p>正在测绘战场地形…</p></div>
 
-<script src="js/data.js?v=20261122save3"></script>
-<script src="js/geo.js?v=20261122save3"></script>
-<script src="js/engine.js?v=20261122save3"></script>
-<script src="js/terrain.js?v=20261122save3"></script>
-<script src="js/render.js?v=20261122save3"></script>
-<script src="js/save.js?v=20261122save3"></script>
-<script src="js/ui.js?v=20261122save3"></script>
-<script src="js/main.js?v=20261122save3"></script>
+<script src="js/data.js?v=20261122save4"></script>
+<script src="js/geo.js?v=20261122save4"></script>
+<script src="js/engine.js?v=20261122save4"></script>
+<script src="js/terrain.js?v=20261122save4"></script>
+<script src="js/render.js?v=20261122save4"></script>
+<script src="js/save.js?v=20261122save4"></script>
+<script src="js/audio.js?v=20261122save4"></script>
+<script src="js/ui.js?v=20261122save4"></script>
+<script src="js/main.js?v=20261122save4"></script>
 </body>
 </html>

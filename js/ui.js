@@ -388,6 +388,13 @@
     $('#btn-exec').addEventListener('click', () => App.execute());
     $('#btn-auto').addEventListener('click', () => App.toggleAuto());
     $('#btn-menu').addEventListener('click', showPauseMenu);
+    $('#btn-sound').addEventListener('click', function () {
+      if (HX.Audio) HX.Audio.toggle();
+    });
+    const tutSkip = $('#btn-tut-skip');
+    if (tutSkip) tutSkip.addEventListener('click', tutorialFinish);
+    const tutNext = $('#btn-tut-next');
+    if (tutNext) tutNext.addEventListener('click', tutorialFinish);
     $('#btn-log').addEventListener('click', showLogModal);
     $('#btn-log-expand').addEventListener('click', showLogModal);
     $('#btn-doc').addEventListener('click', showDocModal);
@@ -475,7 +482,7 @@
         drag = { mode: 'pan', sx: x, sy: y, lx: x, ly: y, moved: false };
       } else if (e.button === 0) {
         if (targeting) {
-          issueTargeting(x, y);
+          issueTargeting(x, y, e.shiftKey);
           drag = null;
           return;
         }
@@ -521,7 +528,7 @@
       R.setBox(null);
       if (App.busy) return;
       if (wasPan) {
-        if (!moved) contextOrder(x, y);
+        if (!moved) contextOrder(x, y, e.shiftKey);
       } else if (mode === 'box') {
         if (moved && box) boxSelect(box);
         else clickSelect(x, y, e.shiftKey);
@@ -605,28 +612,106 @@
     const y1 = Math.min(a.y, b.y), y2 = Math.max(a.y, b.y);
     const ids = App.state.units.filter(u => u.alive && u.faction === 'pla' &&
       u.x >= x1 && u.x <= x2 && u.y >= y1 && u.y <= y2).map(u => u.id);
-    if (ids.length) { App.selectedIds = ids; refreshAll(); }
+    if (ids.length) { App.selectedIds = ids; refreshAll(); tutorialOnSelect(); }
     else App.clearSelection();
   }
 
-  function contextOrder(x, y) {
+  function contextOrder(x, y, quick) {
     const s = App.state;
     if (!App.selectedIds.length) return;
     const u = R.pickUnit(s, x, y);
     if (u && u.faction === 'kmt') {
-      const n = E.orderAttack(s, App.selectedIds, u.id);
-      if (n) { toast('已令 ' + n + ' 部攻击 ' + u.short); R.invalidateReach(); refreshAll(); }
+      if (quick) attackNow(App.selectedIds, u);
+      else showAttackPreview(App.selectedIds, u.id);
     } else if (u && u.faction === 'pla') {
       App.selectedIds = [u.id];
       refreshAll();
+      tutorialOnSelect();
     } else {
       const w = R.screenToWorld(x, y);
       const n = E.orderMove(s, App.selectedIds, w.x, w.y);
-      if (n) { toast('已令 ' + n + ' 部向指定地域行军'); R.invalidateReach(); refreshAll(); }
+      if (n) {
+        toast('已令 ' + n + ' 部向指定地域行军');
+        if (HX.Audio) HX.Audio.order();
+        tutorialOnOrder('move');
+        R.invalidateReach();
+        refreshAll();
+      }
     }
   }
 
-  function issueTargeting(x, y) {
+  function attackNow(ids, target) {
+    const n = E.orderAttack(App.state, ids, target.id);
+    if (n) {
+      toast('已令 ' + n + ' 部攻击 ' + target.short);
+      if (HX.Audio) HX.Audio.order();
+      tutorialOnOrder('attack');
+      R.invalidateReach();
+      refreshAll();
+    } else {
+      toast('命令未能下达', 'warn');
+    }
+    return n;
+  }
+
+  function showAttackPreview(ids, targetId) {
+    const s = App.state;
+    const target = E.unitById(s, targetId);
+    const p = E.previewCombat(s, ids, targetId);
+    if (!target || !p) {
+      toast('无法预估这次攻击', 'warn');
+      return;
+    }
+    const names = p.attackers.map(a => a.short).join('、');
+    const avg = (list, key) => list.length ? list.reduce((n, u) => n + u[key], 0) / list.length : 0;
+    const factorHtml = p.factors.length
+      ? p.factors.map(f => '<span class="ap-chip ' + (f.tone || '') + '">' + esc(f.label) +
+        (f.value ? ' <b>' + esc(f.value) + '</b>' : '') + '</span>').join('')
+      : '<span class="ap-chip">无明显修正</span>';
+    const warnHtml = p.warnings.length
+      ? '<div class="ap-warn">' + p.warnings.map(w => '· ' + esc(w)).join('<br>') + '</div>'
+      : '';
+    const note = p.allEngaged ? '' :
+      '<div class="ap-note">部分部队尚未接敌，以上按当前兵力与地形估算；实际战斗将在接敌后发生。</div>';
+    const body =
+      '<div class="ap-head">' +
+      '<div class="ap-army"><span class="ap-side pla">我军</span><b>' + esc(names) + '</b></div>' +
+      '<div class="ap-vs">对</div>' +
+      '<div class="ap-army"><span class="ap-side kmt">敌军</span><b>' + esc(target.short) + '</b></div>' +
+      '</div>' +
+      '<div class="ap-verdict ' + (p.ratio >= 1.35 ? 'good' : p.ratio < 0.85 ? 'bad' : '') + '">' +
+      esc(p.verdict) + '<span>战力比 ' + p.ratio.toFixed(2) + ' : 1</span></div>' +
+      '<div class="ap-power"><div class="ap-bar"><i class="pla" style="width:' +
+      (p.Ap / Math.max(1, p.Ap + p.Dp) * 100).toFixed(1) + '%"></i><i class="kmt" style="width:' +
+      (p.Dp / Math.max(1, p.Ap + p.Dp) * 100).toFixed(1) + '%"></i></div>' +
+      '<div class="ap-power-num"><span>我军战力 ' + p.Ap.toFixed(1) + '</span><span>敌军战力 ' + p.Dp.toFixed(1) + '</span></div></div>' +
+      '<div class="ap-loss">' +
+      '<div><span>预计敌军损失</span><b>' + fmtTroops(Math.round(p.defLossMin)) + ' – ' + fmtTroops(Math.round(p.defLossMax)) + '</b></div>' +
+      '<div><span>预计我军损失</span><b>' + fmtTroops(Math.round(p.atkLossMin)) + ' – ' + fmtTroops(Math.round(p.atkLossMax)) + '</b></div>' +
+      '</div>' +
+      '<div class="ap-stats">' +
+      '<span>我军 士气 ' + Math.round(avg(p.attackers, 'morale')) + ' · 补给 ' + Math.round(avg(p.attackers, 'supply')) + ' · 疲劳 ' + Math.round(avg(p.attackers, 'fatigue')) + '</span>' +
+      '<span>敌军 士气 ' + Math.round(target.morale) + ' · 补给 ' + Math.round(target.supply) + ' · 工事 ' + Math.round(target.entrench) + '</span>' +
+      '</div>' +
+      '<div class="ap-factors">' + factorHtml + '</div>' + warnHtml + note +
+      '<div class="ap-note">按住 Shift 右键可直接下达攻击令，跳过预估。</div>';
+
+    UI.showModal({
+      kicker: '作战预估 · 攻击',
+      title: '攻击 ' + target.short,
+      sub: '第 ' + s.day + ' 日 · ' + ((E.nearestCity(s, target.x, target.y, 40) || {}).name || '野外'),
+      width: 'wide',
+      closable: true,
+      body: body,
+      actions: [
+        { label: '取消' },
+        { label: '下达攻击令', primary: true, onClick: function () { attackNow(ids, target); } }
+      ]
+    });
+  }
+  UI.showAttackPreview = showAttackPreview;
+
+  function issueTargeting(x, y, quick) {
     const s = App.state;
     const w = R.screenToWorld(x, y);
     if (!targeting) return;
@@ -635,11 +720,20 @@
       if (!ids.length) { cancelTargeting(); return; }
       const n = E.orderMove(s, ids, w.x, w.y);
       toast(n ? '已令 ' + n + ' 部行军' : '命令未能下达', n ? '' : 'warn');
+      if (n) {
+        if (HX.Audio) HX.Audio.order();
+        tutorialOnOrder('move');
+      }
     } else if (targeting.mode === 'attack') {
       const u = R.pickUnit(s, x, y);
       if (!u || u.faction !== 'kmt') { toast('请点击敌军部队', 'warn'); return; }
-      const n = E.orderAttack(s, App.selectedIds, u.id);
-      toast(n ? '已令 ' + n + ' 部攻击 ' + u.short : '命令未能下达', n ? '' : 'warn');
+      if (quick) {
+        attackNow(App.selectedIds, u);
+      } else {
+        cancelTargeting();
+        showAttackPreview(App.selectedIds, u.id);
+        return;
+      }
     } else if (targeting.mode === 'ability') {
       const ids = App.selectedIds;
       const res = E.useAbility(s, targeting.ability, w.x, w.y, ids);
@@ -698,12 +792,14 @@
   function selectOnly(id) {
     App.selectedIds = [id];
     refreshAll();
+    tutorialOnSelect();
   }
   function toggleSelect(id) {
     const i = App.selectedIds.indexOf(id);
     if (i >= 0) App.selectedIds.splice(i, 1);
     else App.selectedIds.push(id);
     refreshAll();
+    tutorialOnSelect();
   }
   UI.selectOnly = selectOnly;
 
@@ -820,7 +916,16 @@
       width: 'narrow',
       body: D.help.sections.map(s => '<h3>' + esc(s.h) + '</h3><p>' + esc(s.p) + '</p>').join('') +
         '<h3>胜负评定</h3><p>战役结束时按三个阶段目标的达成度、歼敌数量与自身伤亡评定战果，并与历史结果对照。</p>',
-      actions: [{ label: '明白', primary: true }]
+      actions: [
+        {
+          label: '重看新手引导', keepOpen: true, onClick: function () {
+            closeModal();
+            if (App && App.state && App.started) tutorialStart(true);
+            else toast('进入战役后可重看引导', 'warn');
+          }
+        },
+        { label: '明白', primary: true }
+      ]
     });
   }
 
@@ -849,6 +954,7 @@
   function showLogModal() {
     const s = App.state;
     if (!s) return;
+    tutorialOnLog();
     let html = '<div class="battlelog">';
     let lastDate = '';
     const icon = { combat: '⚔', victory: '★', loss: '✖', history: '◈', enemy: '◆', order: '▲', info: '·', objective: '✓' };
@@ -1281,6 +1387,7 @@
     const hist = r.historical;
     const ratio = r.kmtLoss / Math.max(1, r.plaLoss);
     const days = Math.min(66, s.day);
+    if (HX.Audio) HX.Audio.result(r.grade === 'S' || r.grade === 'A' || r.grade === 'B' || r.grade === 'C');
     UI.showModal({
       kicker: '战役终结 · 战果评定',
       title: '淮海战役 · ' + r.title,
@@ -1323,6 +1430,117 @@
     toastTimer = setTimeout(() => t.classList.add('hidden'), 2200);
   }
   UI.toast = toast;
+
+  /* ============================================================
+     新手引导
+     ============================================================ */
+  const TUT_KEY = 'huaihai1948.tutorial.v1';
+  const TUT_STEPS = [
+    {
+      title: '第 1 步 · 选中一支部队',
+      text: '左键点击地图上的我军标号，或点击左栏作战序列中的一支部队。',
+      hint: '先选 1 纵或 4 纵都可以。'
+    },
+    {
+      title: '第 2 步 · 下达第一条命令',
+      text: '右键点击地图上的空地行军。右键点击国民党军，会先弹出攻击预估，确认后再下达攻击令。',
+      hint: '目标：向新安镇、碾庄方向推进。按住 Shift 右键可跳过攻击预估。'
+    },
+    {
+      title: '第 3 步 · 执行本日',
+      text: '命令下达后，点击右上角“执行本日”，让部队行动、交战并结算补给。',
+      hint: '也可以按 E。'
+    },
+    {
+      title: '第 1 日已结算',
+      text: '点“完成引导”，或打开“战报”看看今天发生了什么。之后就可以自由指挥了。',
+      hint: 'F11 可全屏，☰ 可保存 / 读取进度。'
+    }
+  ];
+  let tutorial = { active: false, step: 0 };
+
+  function tutorialRender() {
+    if (!tutorial.active) return;
+    const st = TUT_STEPS[Math.min(tutorial.step, TUT_STEPS.length - 1)];
+    const kicker = document.getElementById('tut-kicker');
+    const title = document.getElementById('tut-title');
+    const text = document.getElementById('tut-text');
+    const hint = document.getElementById('tut-hint');
+    const dots = document.getElementById('tut-dots');
+    const next = document.getElementById('btn-tut-next');
+    if (kicker) kicker.textContent = '新手引导 · 第 ' + (tutorial.step + 1) + ' / 4 步';
+    if (title) title.textContent = st.title;
+    if (text) text.textContent = st.text;
+    if (hint) hint.textContent = st.hint;
+    if (dots) {
+      dots.innerHTML = TUT_STEPS.map((s, i) => '<i class="' + (i <= tutorial.step ? 'on' : '') + '"></i>').join('');
+    }
+    if (next) next.classList.toggle('hidden', tutorial.step !== 3);
+    const exec = document.getElementById('btn-exec');
+    if (exec) exec.classList.toggle('tut-pulse', tutorial.step === 2);
+  }
+
+  function tutorialStart(force) {
+    if (tutorial.active) return;
+    if (!force) {
+      try { if (localStorage.getItem(TUT_KEY)) return; } catch (e) { }
+    }
+    if (!App || !App.state || !App.started || App.state.ended) return;
+    const boot = document.getElementById('boot');
+    if (boot && !boot.classList.contains('hidden')) return;
+    tutorial.active = true;
+    tutorial.step = 0;
+    const el = document.getElementById('tutorial');
+    if (el) el.classList.remove('hidden');
+    tutorialRender();
+  }
+
+  function tutorialFinish() {
+    tutorial.active = false;
+    const el = document.getElementById('tutorial');
+    if (el) el.classList.add('hidden');
+    const exec = document.getElementById('btn-exec');
+    if (exec) exec.classList.remove('tut-pulse');
+    try { localStorage.setItem(TUT_KEY, '1'); } catch (e) { }
+  }
+
+  function tutorialAdvance(step) {
+    if (!tutorial.active) return;
+    tutorial.step = step;
+    if (step >= 4) tutorialFinish();
+    else tutorialRender();
+  }
+
+  function tutorialOnSelect() {
+    if (!tutorial.active || tutorial.step !== 0) return;
+    const u = App.state && App.state.units.find(x => x.id === App.selectedIds[0]);
+    if (u && u.faction === 'pla') tutorialAdvance(1);
+  }
+
+  function tutorialOnOrder() {
+    if (tutorial.active && tutorial.step === 1) tutorialAdvance(2);
+  }
+
+  function tutorialOnExecute() {
+    if (tutorial.active && tutorial.step === 2) tutorialAdvance(3);
+  }
+
+  function tutorialOnLog() {
+    if (tutorial.active && tutorial.step === 3) tutorialFinish();
+  }
+
+  UI.startTutorial = tutorialStart;
+  UI.stopTutorial = function () {
+    tutorial.active = false;
+    const el = document.getElementById('tutorial');
+    if (el) el.classList.add('hidden');
+    const exec = document.getElementById('btn-exec');
+    if (exec) exec.classList.remove('tut-pulse');
+  };
+  UI.tutorialOnSelect = tutorialOnSelect;
+  UI.tutorialOnOrder = tutorialOnOrder;
+  UI.tutorialOnExecute = tutorialOnExecute;
+  UI.tutorialOnLog = tutorialOnLog;
 
   /* ============================================================
      开场
