@@ -1,0 +1,20 @@
+# Local build / test artifacts
+dist/
+desktop/packages/
+.tools/
+.ghconfig/
+.gh/
+.probe.txt
+*.log
+
+# Local browser/test profiles
+.edge-profile/
+.edge-app/
+shots/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

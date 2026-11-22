@@ -1,0 +1,26 @@
+Huaihai 1948 · 淮海战役 1948
+Copyright (c) 2026 Snacks
+
+Original source code, text, and procedurally generated game assets
+are licensed under the MIT License. See LICENSE.
+
+Third-party components and materials
+-------------------------------------
+
+1. Microsoft Edge WebView2 SDK
+   Files under desktop/lib/ (Microsoft.Web.WebView2.Core.dll,
+   Microsoft.Web.WebView2.WinForms.dll, WebView2Loader.dll) are
+   Copyright (c) Microsoft Corporation and are redistributed under
+   the terms included in desktop/lib/WebView2-LICENSE.txt.
+   They are not covered by this project's MIT license.
+
+2. Historical document scan: 文章.jpg
+   This is a scan of the "华东野战军淮海战役攻击命令（节选）"
+   (4 November 1948), included for historical research and education.
+   Copyright in the original document and in the scan may belong to
+   their respective owners. It is not covered by this project's MIT
+   license. If you reuse it, verify the applicable rights first.
+
+3. System fonts and the Microsoft Edge / WebView2 runtime are used at
+   runtime and are not distributed as part of this repository, except
+   for the SDK files listed above.

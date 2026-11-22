@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>淮海战役 1948</title>
+<link rel="stylesheet" href="css/style.css?v=20261118b">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23151815'/%3E%3Cpath d='M32 8l7 16 17 2-12 12 3 17-15-8-15 8 3-17-12-12 17-2z' fill='%23b23a30'/%3E%3C/svg%3E">
+</head>
+<body>
+<div id="app">
+  <!-- ================= 顶栏 ================= -->
+  <header id="topbar">
+    <div class="brand">
+      <div class="emblem" aria-hidden="true">
+        <svg viewBox="0 0 40 40"><path d="M20 3l4.6 10.4 11.3 1.2-8.4 7.7 2.3 11.1L20 28.2l-9.8 5.2 2.3-11.1-8.4-7.7 11.3-1.2z"/></svg>
+      </div>
+      <div class="brand-text">
+        <h1>淮海战役</h1>
+        <p>1948 · 徐州—蚌埠战役沙盘</p>
+      </div>
+    </div>
+
+    <div class="clock-block">
+      <div class="date" id="hud-date">1948年11月6日</div>
+      <div class="sub">
+        <span id="hud-weekday">星期六</span>
+        <span class="dot">·</span>
+        <span id="hud-weather">阴雨 13°C</span>
+      </div>
+    </div>
+
+    <div class="phase-block">
+      <div class="phase-top">
+        <span class="phase-tag" id="hud-phase-tag">第一阶段</span>
+        <span class="phase-name" id="hud-phase-name">切断徐蚌 · 围歼黄百韬</span>
+      </div>
+      <div class="phase-track">
+        <i id="hud-phase-fill"></i>
+        <span class="phase-day" id="hud-day">第 1 日 / 共 66 日</span>
+      </div>
+    </div>
+
+    <div class="odds-block">
+      <div class="odds-head">
+        <span class="label">战场兵力</span>
+        <span class="odds-text"><b class="pla" id="hud-pla-troops">56.0万</b> <em>∶</em> <b class="kmt" id="hud-kmt-troops">42.9万</b></span>
+      </div>
+      <div class="odds-bar"><i class="pla" id="hud-odds-pla"></i><i class="kmt" id="hud-odds-kmt"></i></div>
+      <div class="cp-line">
+        <span class="label">指挥点</span>
+        <span class="cp-pips" id="hud-cp"></span>
+      </div>
+    </div>
+
+    <div class="top-actions">
+      <button class="btn primary" id="btn-exec" title="执行本日命令 (E)">
+        <span>执行本日</span><kbd>E</kbd>
+      </button>
+      <button class="btn" id="btn-auto" title="自动推进战局 (空格)">自动推演</button>
+      <button class="btn icon" id="btn-menu" title="战役菜单 / 存档">☰</button>
+      <button class="btn ghost" id="btn-log" title="全部战报">战报</button>
+      <button class="btn ghost" id="btn-doc" title="作战命令原文">命令原文</button>
+      <button class="btn icon" id="btn-help" title="作战手册">?</button>
+    </div>
+  </header>
+
+  <!-- ================= 左栏：作战序列 ================= -->
+  <aside id="left" class="panel">
+    <div class="panel-head">
+      <h2>作战序列</h2>
+      <div class="tabs" id="oob-tabs">
+        <button data-tab="pla" class="active">我军</button>
+        <button data-tab="kmt">敌军</button>
+      </div>
+    </div>
+    <div class="oob-summary" id="oob-summary"></div>
+    <div class="panel-body" id="oob-list"></div>
+    <div class="panel-foot">
+      <div class="legend-row"><i class="dot ok"></i>补给通畅<i class="dot warn"></i>被围断粮</div>
+      <div class="legend-row"><i class="bar pla"></i>解放军<i class="bar kmt"></i>国民党军</div>
+    </div>
+  </aside>
+
+  <!-- ================= 中间：地图 ================= -->
+  <main id="stage">
+    <canvas id="map"></canvas>
+
+    <div id="map-hud">
+      <div id="compass" aria-hidden="true">
+        <svg viewBox="0 0 80 80">
+          <circle cx="40" cy="40" r="30" fill="none" stroke="rgba(190,175,135,.35)" stroke-width="1"/>
+          <circle cx="40" cy="40" r="21" fill="none" stroke="rgba(190,175,135,.16)" stroke-width="1" stroke-dasharray="2 4"/>
+          <path d="M40 7 L45 37 L40 32 L35 37 Z" fill="#c3a76a"/>
+          <path d="M40 73 L45 43 L40 48 L35 43 Z" fill="rgba(195,167,106,.35)"/>
+          <text x="40" y="20" text-anchor="middle" class="compass-n">北</text>
+        </svg>
+      </div>
+      <div id="scalebar"><i></i><span>0</span><span>25</span><span>50 公里</span></div>
+      <div id="coord-readout">116°54′E · 34°18′N</div>
+    </div>
+
+    <div id="hint-banner" class="hidden"></div>
+    <div id="target-banner" class="hidden"></div>
+    <div id="combat-ticker" class="hidden"></div>
+    <div id="busy-indicator" class="hidden"><span></span>作战推演中</div>
+    <div id="map-tooltip" class="hidden"></div>
+    <div id="weather-layer"></div>
+    <div id="vignette"></div>
+
+    <div id="map-legend">
+      <button class="mini" id="btn-zoom-in" title="放大">＋</button>
+      <button class="mini" id="btn-zoom-out" title="缩小">－</button>
+      <button class="mini" id="btn-native-full" title="全屏 (F11)">⛶</button>
+      <button class="mini" id="btn-full" title="隐藏 / 显示侧栏 (F)">▤</button>
+      <button class="mini" id="btn-fit" title="全图">⤢</button>
+      <button class="mini" id="btn-center-xz" title="徐州">徐</button>
+      <button class="mini" id="btn-center-nz" title="碾庄">碾</button>
+    </div>
+  </main>
+
+  <!-- ================= 右栏：详情 / 命令 ================= -->
+  <aside id="right" class="panel">
+    <div id="right-content"></div>
+  </aside>
+
+  <!-- ================= 底栏：战报 ================= -->
+  <footer id="logbar">
+    <div class="log-head">
+      <span>战场通报</span>
+      <div>
+        <button class="mini" id="btn-log-expand">全部战报</button>
+      </div>
+    </div>
+    <div id="log-feed"></div>
+  </footer>
+</div>
+
+<div id="toast" class="hidden"></div>
+<div id="modal-root"></div>
+
+<!-- ================= 开场 ================= -->
+<div id="boot">
+  <div class="boot-bg"></div>
+  <div class="boot-inner">
+    <div class="boot-kicker">战史档案 · 战役沙盘推演</div>
+    <h1 class="boot-title">淮海战役</h1>
+    <div class="boot-sub">1948.11.6 — 1949.1.10 <span>·</span> 徐州—蚌埠</div>
+    <div class="boot-quote" id="boot-quote"></div>
+    <div class="boot-save hidden" id="boot-save">
+      <img id="boot-save-thumb" alt="存档缩略图">
+      <div class="boot-save-text">
+        <div class="bs-kicker" id="boot-save-kicker">继续上次战役</div>
+        <div class="bs-title" id="boot-save-title"></div>
+        <div class="bs-meta" id="boot-save-meta"></div>
+      </div>
+    </div>
+    <div class="boot-actions">
+      <button class="btn primary big hidden" id="btn-boot-continue" disabled>继续战役</button>
+      <button class="btn primary big" id="btn-boot-start" disabled>开始指挥</button>
+      <button class="btn big ghost hidden" id="btn-boot-load">读取存档</button>
+    </div>
+    <div class="boot-actions secondary">
+      <button class="btn big ghost" id="btn-boot-doc">阅读命令原文</button>
+      <button class="btn big ghost" id="btn-boot-help">作战手册</button>
+    </div>
+    <div class="boot-foot">
+      <span>华东野战军 · 中原野战军</span>
+      <span>对阵</span>
+      <span>徐州"剿总"</span>
+    </div>
+  </div>
+</div>
+
+<div id="loading" class="hidden"><div class="spinner"></div><p>正在测绘战场地形…</p></div>
+
+<script src="js/data.js?v=20261122save3"></script>
+<script src="js/geo.js?v=20261122save3"></script>
+<script src="js/engine.js?v=20261122save3"></script>
+<script src="js/terrain.js?v=20261122save3"></script>
+<script src="js/render.js?v=20261122save3"></script>
+<script src="js/save.js?v=20261122save3"></script>
+<script src="js/ui.js?v=20261122save3"></script>
+<script src="js/main.js?v=20261122save3"></script>
+</body>
+</html>
