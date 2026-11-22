@@ -2,7 +2,9 @@
 
 以《文章.jpg》（《华东野战军淮海战役攻击命令（节选）》，1948年11月4日）为史料起点，制作的可交互战役沙盘模拟器。写实军事地图风格，纯前端，无需安装依赖。
 
-[GitHub 仓库](https://github.com/ling-shi-cyber/huaihai-1948) · [下载 Windows 便携版](https://github.com/ling-shi-cyber/huaihai-1948/releases/latest)
+[GitHub 仓库](https://github.com/ling-shi-cyber/huaihai-1948) · [在线试玩](https://ling-shi-cyber.github.io/huaihai-1948/) · [下载 Windows 便携版](https://github.com/ling-shi-cyber/huaihai-1948/releases/latest)
+
+在线试玩：https://ling-shi-cyber.github.io/huaihai-1948/
 
 打开 `index.html` 即可游玩（推荐 Edge / Chrome，桌面端）。
 
