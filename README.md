@@ -119,8 +119,9 @@ tools/                开发验证脚本（Node 推演、无头浏览器 QA）
 
 已打包为可分享的 Windows 应用：
 
-- **便携版压缩包**：`dist/淮海战役1948-便携版.zip`（约 2.7 MB）
+- **直接下载**：[Releases 中的 Windows 便携版](https://github.com/ling-shi-cyber/huaihai-1948/releases/latest)（约 2.7 MB）
 - 解压后双击 `淮海战役1948` 文件夹中的 **`淮海战役1948.exe`** 即可，无需安装。
+- 从源码构建的产物在本地 `dist/` 目录（不提交到仓库），构建方法见 `desktop/`。
 
 技术方案：WinForms + 系统 Microsoft Edge WebView2 运行时，游戏资源内置于 `web` 文件夹，窗口标题、图标、全屏（F11）均按桌面游戏处理。若系统 WebView2 不可用，程序会自动改用本机 Edge 的应用窗口（无地址栏）运行，功能一致；完全找不到浏览器时会给出提示。
 
