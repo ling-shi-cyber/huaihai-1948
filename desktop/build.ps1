@@ -28,6 +28,8 @@ Copy-Item (Join-Path $desktop 'lib\Microsoft.Web.WebView2.Core.dll') $dist
 Copy-Item (Join-Path $desktop 'lib\Microsoft.Web.WebView2.WinForms.dll') $dist
 Copy-Item (Join-Path $desktop 'lib\WebView2Loader.dll') $dist
 Copy-Item (Join-Path $desktop 'lib\WebView2-LICENSE.txt') $dist
+Copy-Item (Join-Path $root 'LICENSE') $dist
+Copy-Item (Join-Path $root 'NOTICE') $dist
 
 $exe = Join-Path $dist '淮海战役1948.exe'
 Write-Host '正在编译桌面程序…'
@@ -90,6 +92,7 @@ Tab：轮换选中我军部队
 Microsoft.Web.WebView2.*.dll  WebView2 托管组件
 WebView2Loader.dll      WebView2 加载器
 web\                    游戏资源（含史料图片、地图、脚本）
+LICENSE / NOTICE         MIT 许可证与第三方说明
 
 【史料】
 游戏内“命令原文”可查看《华东野战军淮海战役攻击命令（节选）》（1948年11月4日）影印件。
